@@ -51,6 +51,21 @@ A change contains a Change-Id, metadata (owner, project, target branch), one or 
      Push again with the same command; Gerrit creates a new patch set tied to the same Change-Id. Repeat review/update as needed.
 5. Submit: when required labels and CI checks are satisfied, a committer clicks SUBMIT; Gerrit merges according to the project’s submit strategy.
 
+## Review is optional
+
+Code review can be optional in some workflows. Certain commits—often produced by CI/CD or automated jobs—may be pushed directly to branches without going through Gerrit's review queue.
+
+Differences between the review and non-review flows are shown in the table below.
+
+| Action | Ref pattern | Gerrit permission(s) | Notes |
+|---|---|---|---|
+| Push for review | refs/for/* | Push to refs/for/* | Typical developer flow; creates a change that goes through review |
+| Direct push (non-review) | refs/heads/* | Direct push / Submit (may require Forge Author or elevated perms) | Usually restricted to repository owners or CI/service accounts; bypasses review and submits directly |
+
+Examples:
+- Push for review: `git push origin HEAD:refs/for/main`
+- Direct push (no review): `git push origin HEAD:main`
+
 ## Cheat sheet
 
 Replace `main` with your repository’s default branch if different.
@@ -108,6 +123,23 @@ git add . && gamend && gpush                              # add patch set to exi
     Note: Gerrit’s expected Change-Id format is typically `Change-Id: I<hex>`.
 
 Gerrit also provides a CLI — see the documentation: https://gerrit-review.googlesource.com/Documentation/cmd-index.html
+
+You can control additional options when pushing by appending modifiers to the ref. For example, `refs/for/main%wip` marks the change as Work-In-Progress (WIP), which prevents accidental submission and indicates the change is not ready for review.
+
+Some examples:
+
+| Action | Explanation | Example command |
+|---|---|---|
+| Mark Work-In-Progress (WIP) | Prevents accidental submission and indicates the change is not ready for review | `git push origin HEAD:refs/for/main%wip` |
+| Mark ready for review | Convert a WIP change to ready for review | `git push origin HEAD:refs/for/main%ready` |
+| Make change private | Restrict visibility of the change | `git push origin HEAD:refs/for/main%private` |
+| Set a topic | Group related changes under a topic name | `git push origin HEAD:refs/for/main%topic=my-feature` |
+| Add reviewers / CCs | Auto-add reviewers or CC recipients (comma-separated) | `git push origin HEAD:refs/for/main%reviewer=alice@example.com,cc=bob@example.com` |
+| Control notifications | Limit who receives emails/notifications (common values: NONE, OWNER, REVIEWERS, ALL) | `git push origin HEAD:refs/for/main%notify=NONE` |
+
+Notes:
+- Multiple modifiers can be combined by separating them with commas, e.g. `%wip,topic=my-feature,notify=OWNER`.
+- Supported modifiers and behavior can vary by Gerrit installation; check your project/server documentation for available options and permission requirements.
 
 ## References
 
