@@ -130,12 +130,13 @@ Some examples:
 
 | Action | Explanation | Example command |
 |---|---|---|
-| Mark Work-In-Progress (WIP) | Prevents accidental submission and indicates the change is not ready for review | `git push origin HEAD:refs/for/main%wip` |
-| Mark ready for review | Convert a WIP change to ready for review | `git push origin HEAD:refs/for/main%ready` |
-| Make change private | Restrict visibility of the change | `git push origin HEAD:refs/for/main%private` |
-| Set a topic | Group related changes under a topic name | `git push origin HEAD:refs/for/main%topic=my-feature` |
-| Add reviewers / CCs | Auto-add reviewers or CC recipients (comma-separated) | `git push origin HEAD:refs/for/main%reviewer=alice@example.com,cc=bob@example.com` |
-| Control notifications | Limit who receives emails/notifications (common values: NONE, OWNER, REVIEWERS, ALL) | `git push origin HEAD:refs/for/main%notify=NONE` |
+| Mark Work-In-Progress (WIP) | Prevents accidental submission; indicates the change is not ready for review | `git push origin HEAD:refs/for/main%wip` |
+| Mark ready for review | Converts a WIP change to ready for review | `git push origin HEAD:refs/for/main%ready` |
+| Make change private | Restricts visibility of the change | `git push origin HEAD:refs/for/main%private` |
+| Remove private flag | Removes visibility restriction | `git push origin HEAD:refs/for/main%remove-private` |
+| Set a topic | Groups related changes under a topic name | `git push origin HEAD:refs/for/main%topic=my-feature` |
+| Add reviewers / CCs | Auto-adds reviewers or CC recipients (comma-separated) | `git push origin HEAD:refs/for/main%reviewer=alice@example.com,cc=bob@example.com` |
+| Control notifications | Limits who receives emails/notifications (values: NONE, OWNER, REVIEWERS, ALL) | `git push origin HEAD:refs/for/main%notify=NONE` |
 
 Notes:
 - Multiple modifiers can be combined by separating them with commas, e.g. `%wip,topic=my-feature,notify=OWNER`.
