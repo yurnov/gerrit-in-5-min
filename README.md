@@ -1,4 +1,4 @@
-# Gerrit in a few minutes
+# Gerrit in a few minutes [![Install Skill](https://img.shields.io/badge/skills.sh-install-blue)](https://skills.sh/yurnov/gerrit-in-5-min/gerrit-review)
 
 A short introduction to Gerrit for developers familiar with git (GitHub, GitLab, Gitea) who are starting to use Gerrit.
 
@@ -141,6 +141,19 @@ Some examples:
 Notes:
 - Multiple modifiers can be combined by separating them with commas, e.g. `%wip,topic=my-feature,notify=OWNER`.
 - Supported modifiers and behavior can vary by Gerrit installation; check your project/server documentation for available options and permission requirements.
+
+## AI Agent Skills
+
+This repository includes an **agent skill** for interacting with Gerrit programmatically via its REST API.
+Install it into AI coding agents such as Claude Code, Cursor, Codex, Copilot, Antigravity, and [30+ others](https://github.com/vercel-labs/skills#supported-agents):
+
+```bash
+npx skills add yurnov/gerrit-in-5-min
+```
+
+The skill enables your agent to query open changes, read diffs, post reviews with labels and inline comments, submit, abandon, and restore changes — all via the Gerrit REST API.
+
+See the [skill README](skills/gerrit-review/README.md) for full configuration, supported operations, and manual installation instructions per agent.
 
 ## References
 
