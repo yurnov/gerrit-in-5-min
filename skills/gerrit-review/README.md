@@ -2,6 +2,8 @@
 
 An AI agent skill for interacting with **Gerrit Code Review** via its REST API. Install it into your coding agent to query changes, read diffs, post reviews, and manage the full change lifecycle — all without leaving your editor.
 
+[![Install Skill](https://img.shields.io/badge/skills.sh-install-blue)](https://skills.sh/yurnov/gerrit-in-5-min/gerrit-review)
+
 ## Requirements
 
 ### Runtime and Dependencies
