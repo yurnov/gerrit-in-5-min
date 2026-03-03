@@ -153,7 +153,7 @@ npx skills add yurnov/gerrit-in-5-min
 
 The skill enables your agent to query open changes, read diffs, post reviews with labels and inline comments, submit, abandon, and restore changes — all via the Gerrit REST API.
 
-See the [skill README](skills/gerrit-review/README.md) for full configuration, supported operations,and manual installation instructions per agent.
+See the [skill README](skills/gerrit-review/README.md) for full configuration, supported operations, and manual installation instructions per agent.
 
 ## References
 

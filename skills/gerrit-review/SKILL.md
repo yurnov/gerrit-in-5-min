@@ -400,11 +400,11 @@ Here is a recommended workflow for performing a code review with this skill:
 }'
 ```
 
-The `comments` of JSON body can be extended with the `CommentInput` entity contains information for creating an inline comment.
+The `comments` field in the JSON body follows the `CommentInput` entity schema. Additional supported fields include:
 - `notify` (string) — notification level for email notifications (`ALL`, `OWNER`, `NONE`, etc, suggest using `OWNER` to avoid spamming everyone)
 - `notify_details` (object) — fine-grained notification control per account
 - `in_reply_to` (string) — optional, the URL encoded UUID of the comment to which this comment is a reply.
-- `unresolved` (boolean) — optional, whether the comment thread should be marked as unresolved. Suggested to set to `false` for the new comment, especially for the CRITICAL, Bug and Security issues. The thread can be resolved later by the reviewer or the author when the issue is fixed.
+- `unresolved` (boolean) — optional, whether the comment thread should be marked as unresolved. Suggested to set to `true` for new comments that represent CRITICAL, Bug, or Security issues so they remain open and must be addressed before merging. Use `false` for purely informational comments or when the issue has already been addressed. The thread can be resolved later by the reviewer or the author when the issue is fixed.
 - `fix_suggestions` (array) — optional, list of suggested fixes for this comment. Each suggestion includes a description and a replacement patch.
 
 ### Step 4 — Submit when ready
