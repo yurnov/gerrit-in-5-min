@@ -1,4 +1,5 @@
-# Gerrit in a few minutes [![Install Skill](https://img.shields.io/badge/skills.sh-install-blue)](https://skills.sh/yurnov/gerrit-in-5-min/gerrit-review)
+# Gerrit in a few minutes
+<!-- [![Install Skill](https://img.shields.io/badge/skills.sh-install-blue)](https://skills.sh/yurnov/gerrit-in-5-min/gerrit-review) -->
 
 A short introduction to Gerrit for developers familiar with git (GitHub, GitLab, Gitea) who are starting to use Gerrit.
 
