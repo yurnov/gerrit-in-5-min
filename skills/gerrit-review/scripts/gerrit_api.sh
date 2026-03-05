@@ -30,6 +30,7 @@
 #   list-files    <change-id> [revision]         List modified files
 #   get-diff      <change-id> <file> [revision]  Get file diff
 #   get-content   <change-id> <file> [revision]  Get raw file content
+#   create-draft  <change-id> <revision> <json>  Create a draft comment
 #   review        <change-id> <revision> <json>  Post a review
 #   submit        <change-id>                    Submit a change
 #   abandon       <change-id> [message]          Abandon a change
@@ -154,6 +155,13 @@ cmd_get_content() {
     | base64 -d
 }
 
+cmd_create_draft() {
+  local change_id="${1:?Usage: create-draft <change-id> <revision> <json-body>}"
+  local revision="${2:?Usage: create-draft <change-id> <revision> <json-body>}"
+  local json_body="${3:?Usage: create-draft <change-id> <revision> <json-body>}"
+  gerrit_put "/changes/${change_id}/revisions/${revision}/drafts" "$json_body" | jq .
+}
+
 cmd_review() {
   local change_id="${1:?Usage: review <change-id> <revision> <json-body>}"
   local revision="${2:?Usage: review <change-id> <revision> <json-body>}"
@@ -211,6 +219,7 @@ cmd_help() {
   echo "  list-files    <change-id> [revision]         List modified files"
   echo "  get-diff      <change-id> <file> [revision]  Get file diff"
   echo "  get-content   <change-id> <file> [revision]  Get raw file content"
+  echo "  create-draft  <change-id> <revision> <json>  Create a draft comment"
   echo "  review        <change-id> <revision> <json>  Post a review"
   echo "  submit        <change-id>                    Submit a change"
   echo "  abandon       <change-id> [message]          Abandon a change"
@@ -231,6 +240,7 @@ case "$command" in
   list-files)   cmd_list_files "$@" ;;
   get-diff)     cmd_get_diff "$@" ;;
   get-content)  cmd_get_content "$@" ;;
+  create-draft) cmd_create_draft "$@" ;;
   review)       cmd_review "$@" ;;
   submit)       cmd_submit "$@" ;;
   abandon)      cmd_abandon "$@" ;;

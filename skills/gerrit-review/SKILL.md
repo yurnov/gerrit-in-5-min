@@ -5,7 +5,7 @@ license: Apache-2.0
 compatibility: Requires git, curl, jq, and base64. Optional python3 for URL encoding.
 metadata:
   author: Yuriy Novostavskyy (@yurnov)
-  version: "1.0"
+  version: "1.1"
   repository: https://github.com/yurnov/gerrit-in-5-min
   keywords: [gerrit, code review, code review automation, developer tools]
 ---
@@ -57,6 +57,9 @@ chmod +x scripts/gerrit_api.sh
 
 # Get raw file content
 ./scripts/gerrit_api.sh get-content 12345 "src/main/App.java"
+
+# Post a draft comment on a specific line
+./scripts/gerrit_api.sh create-draft 12345 current '{"path":"src/main/App.java","line":23,"message":"Consider renaming this.","unresolved":true}'
 
 # Post a review with a Code-Review +1 label
 ./scripts/gerrit_api.sh review 12345 current '{"message":"Looks good!","labels":{"Code-Review":1}}'
@@ -272,7 +275,35 @@ curl -s --user "$GERRIT_USERNAME:$GERRIT_HTTP_PASSWORD" \
   | tail -n +2 | jq .
 ```
 
-#### 7. Submit a Change
+#### 7. Post a Draft Comment
+
+```
+PUT /a/changes/<change-id>/revisions/<revision-id>/drafts
+Content-Type: application/json
+```
+
+**CommentInput** JSON body:
+
+```json
+{
+  "path": "src/main/App.java",
+  "line": 23,
+  "message": "[nit] trailing whitespace",
+  "unresolved": true
+}
+```
+
+Example:
+```bash
+curl -s --user "$GERRIT_USERNAME:$GERRIT_HTTP_PASSWORD" \
+  -X PUT \
+  -H "Content-Type: application/json" \
+  -d '{"path":"src/main/App.java","line":23,"message":"[nit] trailing whitespace","unresolved":true}' \
+  "$GERRIT_URL/a/changes/12345/revisions/current/drafts" \
+  | tail -n +2 | jq .
+```
+
+#### 8. Submit a Change
 
 ```
 POST /a/changes/<change-id>/submit
@@ -288,7 +319,7 @@ curl -s --user "$GERRIT_USERNAME:$GERRIT_HTTP_PASSWORD" \
   | tail -n +2 | jq .
 ```
 
-#### 8. Abandon / Restore a Change
+#### 9. Abandon / Restore a Change
 
 ```
 POST /a/changes/<change-id>/abandon
@@ -315,7 +346,7 @@ curl -s --user "$GERRIT_USERNAME:$GERRIT_HTTP_PASSWORD" \
   | tail -n +2 | jq .
 ```
 
-#### 9. Add Reviewer
+#### 10. Add Reviewer
 
 ```
 POST /a/changes/<change-id>/reviewers
@@ -340,7 +371,7 @@ curl -s --user "$GERRIT_USERNAME:$GERRIT_HTTP_PASSWORD" \
   | tail -n +2 | jq .
 ```
 
-#### 10. Set Topic
+#### 11. Set Topic
 
 ```
 PUT /a/changes/<change-id>/topic
@@ -388,13 +419,42 @@ Here is a recommended workflow for performing a code review with this skill:
 
 ### Step 3 — Post your review
 
+You can either post all comments at once using the `review` endpoint, or incrementally build your review using draft comments and publish them together.
+
+**Option A: Incremental Drafts**
+Create drafts one by one for different files or lines. This is useful when you are doing a complex review.
+
+```bash
+# Add an unresolved draft comment
+./scripts/gerrit_api.sh create-draft 12345 current '{"path":"path/to/file.java","line":42,"message":"Consider using a constant here instead of a magic number.","unresolved":true}'
+
+# Once all drafts are created, publish them and add a vote/summary message
+./scripts/gerrit_api.sh review 12345 current '{
+  "message": "I left a few comments on the implementation. Please take a look.",
+  "labels": {"Code-Review": -1},
+  "drafts": "PUBLISH"
+}'
+```
+
+**Option B: Single Step Review**
+Post the summary and all inline comments in a single payload.
+
 ```bash
 ./scripts/gerrit_api.sh review 12345 current '{
   "message": "Overall the approach looks solid. A few suggestions below.",
   "labels": {"Code-Review": 1},
   "comments": {
     "path/to/file.java": [
-      {"line": 42, "message": "Consider using a constant here instead of a magic number."}
+      {
+        "line": 42, 
+        "message": "Consider using a constant here instead of a magic number.",
+        "unresolved": true
+      },
+      {
+        "line": 65,
+        "message": "Nice cleanup here.",
+        "unresolved": false
+      }
     ]
   }
 }'
@@ -404,7 +464,7 @@ The `comments` field in the JSON body follows the `CommentInput` entity schema. 
 - `notify` (string) — notification level for email notifications (`ALL`, `OWNER`, `NONE`, etc, suggest using `OWNER` to avoid spamming everyone)
 - `notify_details` (object) — fine-grained notification control per account
 - `in_reply_to` (string) — optional, the URL encoded UUID of the comment to which this comment is a reply.
-- `unresolved` (boolean) — optional, whether the comment thread should be marked as unresolved. Suggested to set to `true` for new comments that represent CRITICAL, Bug, or Security issues so they remain open and must be addressed before merging. Use `false` for purely informational comments or when the issue has already been addressed. The thread can be resolved later by the reviewer or the author when the issue is fixed.
+- `unresolved` (boolean) — optional, whether the comment thread should be marked as unresolved. **Crucial for Agent behavior:** Set to `true` for comments that require action and must be addressed before merging. Set to `false` for informational comments, praise, or purely optional nits. Explicitly declaring this state ensures proper tracking in the review UI.
 - `fix_suggestions` (array) — optional, list of suggested fixes for this comment. Each suggestion includes a description and a replacement patch.
 
 ### Step 4 — Submit when ready
