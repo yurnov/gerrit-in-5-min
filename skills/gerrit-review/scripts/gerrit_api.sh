@@ -14,15 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# gerrit_api.sh — Gerrit REST API helper script
+# gerrit_api.sh — Gerrit REST API helper
 #
-# Required environment variables:
-#   GERRIT_URL            — Base URL (e.g. https://gerrit.example.com)
-#   GERRIT_USERNAME       — HTTP username
-#   GERRIT_HTTP_PASSWORD  — HTTP credential token
+# Authentication (checked in order):
+#   1. ~/.netrc  — preferred; entry for the Gerrit host (see curl --netrc)
+#   2. Environment variables GERRIT_USERNAME + GERRIT_HTTP_PASSWORD
 #
-# Usage:
-#   ./gerrit_api.sh <command> [args...]
+# Required:
+#   GERRIT_URL — Base URL (e.g. https://gerrit.example.com)
+#
+# Usage: ./gerrit_api.sh <command> [args...]
 #
 # Commands:
 #   query         <query-string> [options...]   Query for changes
@@ -30,6 +31,7 @@
 #   list-files    <change-id> [revision]         List modified files
 #   get-diff      <change-id> <file> [revision]  Get file diff
 #   get-content   <change-id> <file> [revision]  Get raw file content
+#   list-comments <change-id>                    List all published comments
 #   create-draft  <change-id> <revision> <json>  Create a draft comment
 #   review        <change-id> <revision> <json>  Post a review
 #   submit        <change-id>                    Submit a change
@@ -43,64 +45,61 @@ set -euo pipefail
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
-if [[ -z "${GERRIT_URL:-}" ]]; then
-  echo "ERROR: GERRIT_URL is not set." >&2
-  exit 1
-fi
-if [[ -z "${GERRIT_USERNAME:-}" ]]; then
-  echo "ERROR: GERRIT_USERNAME is not set." >&2
-  exit 1
-fi
-if [[ -z "${GERRIT_HTTP_PASSWORD:-}" ]]; then
-  echo "ERROR: GERRIT_HTTP_PASSWORD is not set." >&2
-  exit 1
-fi
+BASE_URL=""
+AUTH_ARGS=()
 
-# Remove trailing slash from base URL
-BASE_URL="${GERRIT_URL%/}"
-AUTH_HEADER="--user ${GERRIT_USERNAME}:${GERRIT_HTTP_PASSWORD}"
+init_config() {
+  if [[ -z "${GERRIT_URL:-}" ]]; then
+    echo "ERROR: GERRIT_URL is not set." >&2
+    exit 1
+  fi
+
+  BASE_URL="${GERRIT_URL%/}"
+  local host
+  host=$(echo "$BASE_URL" | sed -E 's|https?://||; s|[:/].*||')
+
+  if [[ -f ~/.netrc ]] && grep -q "machine[[:space:]]*${host}" ~/.netrc; then
+    AUTH_ARGS=(--netrc)
+  elif [[ -n "${GERRIT_USERNAME:-}" && -n "${GERRIT_HTTP_PASSWORD:-}" ]]; then
+    AUTH_ARGS=(--user "${GERRIT_USERNAME}:${GERRIT_HTTP_PASSWORD}")
+  else
+    echo "ERROR: No credentials found for ${host}." >&2
+    echo "Either add an entry to ~/.netrc:" >&2
+    echo "  machine ${host}" >&2
+    echo "  login <username>" >&2
+    echo "  password <http-token>" >&2
+    echo "Or set GERRIT_USERNAME and GERRIT_HTTP_PASSWORD." >&2
+    exit 1
+  fi
+}
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-# URL-encode a string (handles /, spaces, and special chars)
 url_encode() {
-  local string="$1"
-  python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$string" 2>/dev/null \
-    || printf '%s' "$string" | sed 's/\//%2F/g; s/ /%20/g'
+  python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1" 2>/dev/null \
+    || printf '%s' "$1" | sed 's/\//%2F/g; s/ /%20/g'
 }
 
-# Strip the Gerrit XSSI prefix )]}' from the response
-strip_xssi() {
-  tail -n +2
-}
+strip_xssi() { tail -n +2; }
 
-# Make an authenticated GET request and strip the XSSI prefix
 gerrit_get() {
-  local endpoint="$1"
-  shift
-  curl -sf ${AUTH_HEADER} "$@" "${BASE_URL}/a${endpoint}" | strip_xssi
+  [[ -z "$BASE_URL" ]] && init_config
+  local endpoint="$1"; shift
+  curl -sf "${AUTH_ARGS[@]}" "$@" "${BASE_URL}/a${endpoint}" | strip_xssi
 }
 
-# Make an authenticated POST request with JSON body
 gerrit_post() {
-  local endpoint="$1"
-  local body="${2:-{}}"
-  curl -sf ${AUTH_HEADER} \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d "$body" \
-    "${BASE_URL}/a${endpoint}" | strip_xssi
+  [[ -z "$BASE_URL" ]] && init_config
+  local endpoint="$1" body="${2:-{}}"
+  curl -sf "${AUTH_ARGS[@]}" -X POST -H "Content-Type: application/json" \
+    -d "$body" "${BASE_URL}/a${endpoint}" | strip_xssi
 }
 
-# Make an authenticated PUT request with JSON body
 gerrit_put() {
-  local endpoint="$1"
-  local body="${2:-{}}"
-  curl -sf ${AUTH_HEADER} \
-    -X PUT \
-    -H "Content-Type: application/json" \
-    -d "$body" \
-    "${BASE_URL}/a${endpoint}" | strip_xssi
+  [[ -z "$BASE_URL" ]] && init_config
+  local endpoint="$1" body="${2:-{}}"
+  curl -sf "${AUTH_ARGS[@]}" -X PUT -H "Content-Type: application/json" \
+    -d "$body" "${BASE_URL}/a${endpoint}" | strip_xssi
 }
 
 # ─── Commands ────────────────────────────────────────────────────────────────
@@ -109,22 +108,18 @@ cmd_query() {
   local query="${1:?Usage: query <query-string> [o=OPTION ...]}"
   shift
   local opts=""
-  for opt in "$@"; do
-    opts="${opts}&o=${opt}"
-  done
+  for opt in "$@"; do opts="${opts}&o=${opt}"; done
   gerrit_get "/changes/?q=${query}&n=25${opts}" | jq .
 }
 
 cmd_get_change() {
   local change_id="${1:?Usage: get-change <change-id> [o=OPTION ...]}"
   shift
-  local opts=""
-  for opt in "${@:-CURRENT_REVISION DETAILED_LABELS DETAILED_ACCOUNTS}"; do
-    opts="${opts}&o=${opt}"
-  done
-  if [[ -z "$opts" ]]; then
-    opts="&o=CURRENT_REVISION&o=DETAILED_LABELS&o=DETAILED_ACCOUNTS"
+  if [[ $# -eq 0 ]]; then
+    set -- CURRENT_REVISION DETAILED_LABELS DETAILED_ACCOUNTS
   fi
+  local opts="o=$1"; shift
+  for opt in "$@"; do opts="${opts}&o=${opt}"; done
   gerrit_get "/changes/${change_id}?${opts}" | jq .
 }
 
@@ -138,21 +133,22 @@ cmd_get_diff() {
   local change_id="${1:?Usage: get-diff <change-id> <file-path> [revision]}"
   local file_path="${2:?Usage: get-diff <change-id> <file-path> [revision]}"
   local revision="${3:-current}"
-  local encoded_file
-  encoded_file=$(url_encode "$file_path")
-  gerrit_get "/changes/${change_id}/revisions/${revision}/files/${encoded_file}/diff" | jq .
+  gerrit_get "/changes/${change_id}/revisions/${revision}/files/$(url_encode "$file_path")/diff" | jq .
 }
 
 cmd_get_content() {
+  [[ -z "$BASE_URL" ]] && init_config
   local change_id="${1:?Usage: get-content <change-id> <file-path> [revision]}"
   local file_path="${2:?Usage: get-content <change-id> <file-path> [revision]}"
   local revision="${3:-current}"
-  local encoded_file
-  encoded_file=$(url_encode "$file_path")
-  # File content endpoint returns base64-encoded content without XSSI prefix
-  curl -sf ${AUTH_HEADER} \
-    "${BASE_URL}/a/changes/${change_id}/revisions/${revision}/files/${encoded_file}/content" \
+  curl -sf "${AUTH_ARGS[@]}" \
+    "${BASE_URL}/a/changes/${change_id}/revisions/${revision}/files/$(url_encode "$file_path")/content" \
     | base64 -d
+}
+
+cmd_list_comments() {
+  local change_id="${1:?Usage: list-comments <change-id>}"
+  gerrit_get "/changes/${change_id}/comments" | jq .
 }
 
 cmd_create_draft() {
@@ -176,38 +172,28 @@ cmd_submit() {
 
 cmd_abandon() {
   local change_id="${1:?Usage: abandon <change-id> [message]}"
-  local message="${2:-}"
-  local body='{}'
-  if [[ -n "$message" ]]; then
-    body=$(jq -n --arg msg "$message" '{"message": $msg}')
-  fi
+  local message="${2:-}" body='{}'
+  [[ -n "$message" ]] && body=$(jq -n --arg msg "$message" '{"message":$msg}')
   gerrit_post "/changes/${change_id}/abandon" "$body" | jq .
 }
 
 cmd_restore() {
   local change_id="${1:?Usage: restore <change-id> [message]}"
-  local message="${2:-}"
-  local body='{}'
-  if [[ -n "$message" ]]; then
-    body=$(jq -n --arg msg "$message" '{"message": $msg}')
-  fi
+  local message="${2:-}" body='{}'
+  [[ -n "$message" ]] && body=$(jq -n --arg msg "$message" '{"message":$msg}')
   gerrit_post "/changes/${change_id}/restore" "$body" | jq .
 }
 
 cmd_add_reviewer() {
-  local change_id="${1:?Usage: add-reviewer <change-id> <account-email-or-id>}"
-  local reviewer="${2:?Usage: add-reviewer <change-id> <account-email-or-id>}"
-  local body
-  body=$(jq -n --arg r "$reviewer" '{"reviewer": $r}')
-  gerrit_post "/changes/${change_id}/reviewers" "$body" | jq .
+  local change_id="${1:?Usage: add-reviewer <change-id> <account>}"
+  local reviewer="${2:?Usage: add-reviewer <change-id> <account>}"
+  gerrit_post "/changes/${change_id}/reviewers" "$(jq -n --arg r "$reviewer" '{"reviewer":$r}')" | jq .
 }
 
 cmd_set_topic() {
   local change_id="${1:?Usage: set-topic <change-id> <topic>}"
   local topic="${2:?Usage: set-topic <change-id> <topic>}"
-  local body
-  body=$(jq -n --arg t "$topic" '{"topic": $t}')
-  gerrit_put "/changes/${change_id}/topic" "$body" | jq .
+  gerrit_put "/changes/${change_id}/topic" "$(jq -n --arg t "$topic" '{"topic":$t}')" | jq .
 }
 
 cmd_help() {
@@ -219,6 +205,7 @@ cmd_help() {
   echo "  list-files    <change-id> [revision]         List modified files"
   echo "  get-diff      <change-id> <file> [revision]  Get file diff"
   echo "  get-content   <change-id> <file> [revision]  Get raw file content"
+  echo "  list-comments <change-id>                    List all published comments"
   echo "  create-draft  <change-id> <revision> <json>  Create a draft comment"
   echo "  review        <change-id> <revision> <json>  Post a review"
   echo "  submit        <change-id>                    Submit a change"
@@ -240,6 +227,7 @@ case "$command" in
   list-files)   cmd_list_files "$@" ;;
   get-diff)     cmd_get_diff "$@" ;;
   get-content)  cmd_get_content "$@" ;;
+  list-comments) cmd_list_comments "$@" ;;
   create-draft) cmd_create_draft "$@" ;;
   review)       cmd_review "$@" ;;
   submit)       cmd_submit "$@" ;;

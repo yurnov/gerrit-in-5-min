@@ -19,7 +19,9 @@ An AI agent skill for interacting with **Gerrit Code Review** via its REST API. 
 
 ### Access to Gerrit
 - Gerrit URL
-- Valid credentials (Gerrit HTTP username and credential token)
+- Valid credentials, provided through either:
+  - `~/.netrc` for the Gerrit host (**recommended**)
+  - `GERRIT_USERNAME` and `GERRIT_HTTP_PASSWORD` environment variables
 
 
 ## Install
@@ -48,18 +50,47 @@ npx skills add yurnov/gerrit-in-5-min --skill gerrit-review -a codex
 
 ## Configuration
 
-The skill requires three environment variables. Set them in your shell profile (`.bashrc`, `.zshrc`, etc.):
+The helper script checks credentials in this order:
+
+1. `~/.netrc` (**recommended**)
+2. `GERRIT_USERNAME` and `GERRIT_HTTP_PASSWORD` environment variables
+
+`GERRIT_URL` is always required:
+
+```bash
+export GERRIT_URL="https://gerrit.example.com"
+```
+
+### Option 1 — `.netrc` (preferred)
+
+Add an entry for your Gerrit host:
+
+```text
+machine gerrit.example.com
+login your.username
+password your-http-token
+```
+
+Then secure the file:
+
+```bash
+chmod 600 ~/.netrc
+```
+
+This keeps credentials out of the process list and shell environment because the script uses `curl --netrc`.
+
+### Option 2 — Environment Variables (fallback)
+
+If the Gerrit host is not present in `~/.netrc`, set:
 
 | Variable | Description | Where to Get It |
 |---|---|---|
-| `GERRIT_URL` | Base URL of your Gerrit instance | e.g. `https://gerrit.example.com` |
 | `GERRIT_USERNAME` | Your Gerrit HTTP username | Gerrit → Settings → Profile |
 | `GERRIT_HTTP_PASSWORD` | Your Gerrit HTTP credential token | Gerrit → Settings → **HTTP Credentials** → Generate Password |
 
 > **Note:** `GERRIT_HTTP_PASSWORD` is **not** your login password. It is a separate token generated in the Gerrit web UI.
 
 ```bash
-export GERRIT_URL="https://gerrit.example.com"
 export GERRIT_USERNAME="your.username"
 export GERRIT_HTTP_PASSWORD="your-http-token"
 ```
@@ -73,37 +104,79 @@ The skill (and the included helper script) support:
 3. **List modified files** — for any revision / patch set
 4. **Get file diff** — per-file diff with line ranges
 5. **Get file content** — raw decoded content of any file in the change
-6. **Post a review** — set labels (`Code-Review`, `Verified`) and inline comments
-7. **Submit a change** — merge when requirements are met
-8. **Abandon / Restore** — manage change lifecycle with optional message
-9. **Add reviewer** — add reviewer or CC to a change
-10. **Set topic** — label changes for grouping
+6. **List published comments** — inspect review feedback already posted on a change
+7. **Create draft comments** — stage line comments before publishing them
+8. **Post a review** — set labels (`Code-Review`, `Verified`) and inline comments
+9. **Submit a change** — merge when requirements are met
+10. **Abandon / Restore** — manage change lifecycle with optional message
+11. **Add reviewer** — add reviewer or CC to a change
+12. **Set topic** — label changes for grouping
 
 ## Helper Script Usage
 
-The `scripts/gerrit_api.sh` script wraps all REST API calls with authentication, JSON formatting, and URL encoding built in.
+The `scripts/gerrit_api.sh` script wraps REST API calls with authentication, XSSI stripping, JSON formatting, URL encoding, and base64 decoding for file content.
 
 ```bash
 chmod +x skills/gerrit-review/scripts/gerrit_api.sh
 cd skills/gerrit-review
 
-# Query open changes you own
-./scripts/gerrit_api.sh query "status:open+owner:self"
+# Query open changes assigned for review
+./scripts/gerrit_api.sh query "status:open+reviewer:self+-owner:self"
 
 # Inspect a change
 ./scripts/gerrit_api.sh get-change 12345
 ./scripts/gerrit_api.sh list-files 12345
 ./scripts/gerrit_api.sh get-diff 12345 "src/main/App.java"
+./scripts/gerrit_api.sh get-content 12345 "src/main/App.java"
+./scripts/gerrit_api.sh list-comments 12345
 
-# Post a +1 code review
+# Create a draft comment, then publish it in a review
+./scripts/gerrit_api.sh create-draft 12345 current \
+  '{"path":"src/main/App.java","line":23,"message":"Consider renaming this.","unresolved":true}'
+
+# Post a review with labels and optional inline comments
 ./scripts/gerrit_api.sh review 12345 current \
   '{"message":"Looks good!","labels":{"Code-Review":1}}'
 
-# Submit, abandon, restore
+# Manage lifecycle and metadata
 ./scripts/gerrit_api.sh submit 12345
 ./scripts/gerrit_api.sh abandon 12345 "Superseded by #12346"
 ./scripts/gerrit_api.sh restore 12345
+./scripts/gerrit_api.sh add-reviewer 12345 reviewer@example.com
+./scripts/gerrit_api.sh set-topic 12345 feature-cleanup
 ```
+
+## Reviewing Follow-Up Patch Sets
+
+`list-comments` is especially useful when a change already has review history and you need to evaluate the latest patch set in context.
+
+Use it first to retrieve previously published comments:
+
+```bash
+./scripts/gerrit_api.sh list-comments 12345
+```
+
+Then review the latest patch set against that history:
+
+```bash
+./scripts/gerrit_api.sh list-files 12345 current
+./scripts/gerrit_api.sh get-diff 12345 "src/main/App.java" current
+./scripts/gerrit_api.sh get-content 12345 "src/main/App.java" current
+```
+
+Recommended approach:
+
+1. Read earlier comments and identify the actionable ones.
+2. Check the latest diff and current file content for the same files and code regions.
+3. Decide whether each prior concern was fully addressed, partially addressed, or not addressed.
+4. Avoid repeating resolved comments; for remaining issues, post a focused follow-up and use `in_reply_to` if you are continuing an existing thread.
+
+## REST API Notes
+
+- Authenticated Gerrit REST endpoints use the `/a/` prefix.
+- Gerrit JSON responses start with the XSSI prefix `)]}'`; the helper script strips it automatically.
+- Change IDs can be a numeric change number, `project~branch~Change-Id`, or just the `Change-Id`.
+- File paths are URL-encoded automatically by the helper script.
 
 ## Manual Installation
 
@@ -126,6 +199,15 @@ Copy these files to the target path:
 ## Compatibility
 
 Tested with Gerrit 3.x and above. The REST API used (`/a/changes/`, `/a/changes/{id}/revisions/{rev}/review`, etc.) has been stable since Gerrit 2.14.
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `No credentials found` | Add the Gerrit host to `~/.netrc` or set `GERRIT_USERNAME` and `GERRIT_HTTP_PASSWORD`. |
+| `401 Unauthorized` | Verify the `.netrc` entry or regenerate the HTTP credential token in Gerrit Settings. |
+| `404 Not Found` | Check the change ID and ensure `GERRIT_URL` has no trailing slash. |
+| JSON parse error | Gerrit likely returned the XSSI prefix; use the helper script or strip the first line before piping to `jq`. |
 
 ## References
 
