@@ -30,7 +30,7 @@ An AI agent skill for interacting with **Gerrit Code Review** via its REST API. 
 npx skills add yurnov/gerrit-in-5-min
 ```
 
-This works for **30+ AI agents** including Claude Code, Cursor, Codex, Antigravity, Windsurf, Copilot, OpenHands, and more.
+This works for **30+ AI agents** including Claude Code, Cursor, Codex, Antigravity, Windsurf, Copilot, Kiro CLI, OpenHands, and more.
 
 To install to a specific agent only:
 
@@ -46,7 +46,28 @@ npx skills add yurnov/gerrit-in-5-min --skill gerrit-review -a cursor
 
 # Codex
 npx skills add yurnov/gerrit-in-5-min --skill gerrit-review -a codex
+
+# Kiro CLI (Amazon)
+npx skills add yurnov/gerrit-in-5-min --skill gerrit-review -a kiro-cli
 ```
+
+### Kiro CLI
+
+Kiro CLI's default agent automatically loads skills from `.kiro/skills/` (workspace) and
+`~/.kiro/skills/` (global) — no extra configuration is needed after installing.
+
+If you use a **custom agent**, add the skill to that agent's `resources` in
+`.kiro/agents/<agent>.json` so it gets loaded:
+
+```json
+{
+  "resources": [
+    "skill://.kiro/skills/gerrit-review/SKILL.md"
+  ]
+}
+```
+
+Once loaded, ask Kiro to review a change, or invoke it explicitly with `/gerrit-review`.
 
 ## Configuration
 
@@ -186,6 +207,7 @@ If you prefer not to use `npx skills add`, copy the files manually to the approp
 |---|---|---|
 | Antigravity | `.agent/skills/gerrit-review/` | `~/.gemini/antigravity/skills/gerrit-review/` |
 | Claude Code | `.claude/skills/gerrit-review/` | `~/.claude/skills/gerrit-review/` |
+| Kiro CLI | `.kiro/skills/gerrit-review/` | `~/.kiro/skills/gerrit-review/` |
 | Cursor | `.agents/skills/gerrit-review/` | `~/.cursor/skills/gerrit-review/` |
 | Codex | `.agents/skills/gerrit-review/` | `~/.codex/skills/gerrit-review/` |
 | Windsurf | `.windsurf/skills/gerrit-review/` | `~/.codeium/windsurf/skills/gerrit-review/` |
