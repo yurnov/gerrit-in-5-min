@@ -197,7 +197,15 @@ cmd_set_topic() {
 }
 
 cmd_help() {
-  sed -n '2,/^$/{ s/^# *//; p }' "$0"
+  echo "gerrit_api.sh — Gerrit REST API helper"
+  echo ""
+  echo "Authentication (checked in order):"
+  echo "  1. ~/.netrc  — preferred; entry for the Gerrit host (see curl --netrc)"
+  echo "  2. Environment variables GERRIT_USERNAME + GERRIT_HTTP_PASSWORD"
+  echo ""
+  echo "Required: GERRIT_URL (e.g. https://gerrit.example.com)"
+  echo ""
+  echo "Usage: $(basename "$0") <command> [args...]"
   echo ""
   echo "Commands:"
   echo "  query         <query-string> [options...]   Query for changes"
